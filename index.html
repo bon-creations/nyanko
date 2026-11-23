@@ -64,6 +64,7 @@ button:focus-visible{outline:calc(var(--u)*3) solid var(--alien);outline-offset:
 }
 #btnRescue:not(:disabled){opacity:1;background:var(--orb);color:var(--ink);animation:ready .5s ease-in-out infinite alternate}
 #btnRescue.busy{background:var(--paper);animation:none}
+#btnRescue{bottom:calc(var(--u)*128);width:calc(var(--u)*118);height:calc(var(--u)*118);padding:0!important;border-radius:50%!important;font-size:calc(var(--u)*21);line-height:1.25;touch-action:none;text-align:center}
 @keyframes ready{to{transform:scale(1.08) rotate(-2deg)}}
 .ov{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(248,246,239,.8)}
 .side{display:none;flex:none;width:calc(var(--u)*230);flex-direction:column;gap:calc(var(--u)*14);font-size:calc(var(--u)*16);line-height:1.5;align-self:center}
@@ -124,7 +125,7 @@ button:focus-visible{outline:calc(var(--u)*3) solid var(--alien);outline-offset:
       <dl>
         <dt style="--g:var(--green)">うごかす</dt><dd>マウスを動かす（クリック不要）／矢印キー・WASD</dd>
         <dt style="--g:var(--green)">はね返す</dt><dd>にゃんこをねらうビームの前に立つと、緑の光で打ち返せる</dd>
-        <dt style="--g:var(--orb)">ゴムでぽん</dt><dd>光る玉のにゃんこを助ける。「ゴムでぽん」ボタン(Eキー)のあと、画面をひっぱってはなすと玉が飛ぶ。ねらっている間はうごけないけど、ビームははね返せる</dd>
+        <dt style="--g:var(--orb)">ゴムでぽん</dt><dd>光る玉のにゃんこを助ける。左下の丸い「ゴムでぽん」を指でひっぱってはなすと玉が飛ぶ。ひっぱっている間も、ほかの指でボンちゃんを動かせる(Eキーで自動ねらい)</dd>
         <dt style="--g:#ff3d8b">ハート</dt><dd>5こ。にゃんこが宇宙人にすいこまれると1こへる。WAVEをクリアすると1こもどる。WAVE30でクリア!</dd>
         <dt style="--g:var(--ink)">ボンパンチ</dt><dd>はね返しを4回ためると使える</dd>
       </dl>
@@ -152,7 +153,7 @@ button:focus-visible{outline:calc(var(--u)*3) solid var(--alien);outline-offset:
         <b>お知らせ</b>
         <span>制作 2026年10月20日</span>
         <span>公開 2026年10月29日</span>
-        <span>更新 2026年11月17日</span>
+        <span>更新 2026年11月23日</span>
         <span>ハイスコア <span id="bestT">0</span></span>
       </div>
       <div class="menu">
@@ -170,7 +171,7 @@ button:focus-visible{outline:calc(var(--u)*3) solid var(--alien);outline-offset:
         <ul class="how">
           <li><b style="--g:var(--green)">うごかす</b><span>画面を指でなぞる(PCはマウス・矢印キー)</span></li>
           <li><b style="--g:var(--green)">はね返す</b><span>にゃんこをねらうビームの前に立つと、緑の光で打ち返せる</span></li>
-          <li><b style="--g:var(--orb)">ゴムでぽん</b><span>光る玉のにゃんこを助ける。ボタンをおして、画面をひっぱってはなす。ねらっている間はうごけないよ</span></li>
+          <li><b style="--g:var(--orb)">ゴムでぽん</b><span>光る玉のにゃんこを助ける。左下の丸い「ゴムでぽん」を指でひっぱって、はなす。ほかの指でボンちゃんも動かせるよ。ねらいは少しずれても当たる</span></li>
           <li><b style="--g:var(--ink)">ボンパンチ</b><span>はね返しを4回ためて、ボタンをおす</span></li>
           <li><b style="--g:#ff3d8b">ハート</b><span>5こ。にゃんこがすいこまれると1こへる。WAVEをクリアすると1こもどる。WAVE30でクリア!</span></li>
         </ul>
@@ -695,16 +696,23 @@ function capture(cat, ufo) {
   SFX.abduct(); SFX.sadMeow();
 }
 const LIVES = 5;
-const SLING = { MAXPULL: 150, MINPULL: 26, G: 760, CD: .7, R: 9 };
+const SLING = { MAXPULL: 120, MINPULL: 20, G: 760, CD: .7, R: 9 };
 const anyOrb = () => G.cats.some(c => c.state === 'orb');
-function rescueStart() {
-  if (G.state !== 'play') return;
-  if (G.rs) { G.rs = null; return; }
-  if (G.cd > 0 || !anyOrb()) return;
-  G.rs = { drag: false, sx: 0, sy: 0, dx: 0, dy: -1, pull: 0 }; bon.tx = bon.x; bon.ty = bon.y; SFX.click();
+let aimId = null;
+const canAim = () => G.state === 'play' && anyOrb() && G.cd <= 0;
+function padDown(e) {
+  if (!canAim()) return; e.preventDefault(); e.stopPropagation();
+  aimId = e.pointerId; G.rs = { drag: true, sx: 0, sy: 0, dx: 0, dy: -1, pull: 0 }; aimSet(e, true); SFX.click();
+  try { $('btnRescue').setPointerCapture(e.pointerId); } catch (_) {}
 }
-function rescueCancel(hit) {
-  if (!G.rs) return; G.rs = null;
+function padEnd(e) {
+  if (e.pointerId !== aimId) return; aimId = null;
+  if (G.rs && G.state === 'play') aimFire(); G.rs = null;
+}
+function quickShot() {
+  if (!canAim()) return; const o = bonCircle(), orb = G.cats.filter(c => c.state === 'orb').sort((p, q) => Math.hypot(p.x - o.x, p.y - o.y) - Math.hypot(q.x - o.x, q.y - o.y))[0];
+  const dx = orb.x - o.x, dy = orb.y - o.y, l = Math.hypot(dx, dy) || 1, sp = 1100;
+  G.shots.push({ x: o.x, y: o.y - o.r * .3, vx: dx / l * sp, vy: dy / l * sp, t: 0 }); G.cd = SLING.CD; SFX.fire(); SFX.whoosh();
 }
 function aimSet(e, start) {
   const a = G.rs; if (!a) return; const r = canvas.getBoundingClientRect(), x = (e.clientX - r.left) / r.width * W, y = (e.clientY - r.top) / r.height * H;
@@ -715,7 +723,7 @@ function aimSet(e, start) {
 const slingPoint = () => { const o = bonCircle(), a = G.rs; return { x: o.x - a.dx * a.pull * .55, y: o.y - o.r * .3 - a.dy * a.pull * .55 }; };
 function aimFire() {
   const a = G.rs; if (!a) return; a.drag = false;
-  if (a.pull < SLING.MINPULL) { a.pull = 0; return; }
+  if (a.pull < SLING.MINPULL) { a.pull = 0; G.rs = null; return; }
   const p = slingPoint(), sp = 480 + 820 * a.pull / SLING.MAXPULL;
   G.shots.push({ x: p.x, y: p.y, vx: a.dx * sp, vy: a.dy * sp, t: 0 }); G.rs = null; G.cd = SLING.CD; SFX.fire(); SFX.whoosh();
 }
@@ -844,8 +852,7 @@ function update(dt) {
   const kx = (keys.ArrowRight || keys.d || keys.D ? 1 : 0) - (keys.ArrowLeft || keys.a || keys.A ? 1 : 0);
   const ky = (keys.ArrowDown || keys.s || keys.S ? 1 : 0) - (keys.ArrowUp || keys.w || keys.W ? 1 : 0);
   const px = bon.x, py = bon.y;
-  if (G.rs) { bon.tx = bon.x; bon.ty = bon.y; }
-  else if (kx || ky) { const l = Math.hypot(kx, ky); bon.x += kx / l * 470 * dt; bon.y += ky / l * 470 * dt; bon.tx = bon.x; bon.ty = bon.y; }
+  if (kx || ky) { const l = Math.hypot(kx, ky); bon.x += kx / l * 470 * dt; bon.y += ky / l * 470 * dt; bon.tx = bon.x; bon.ty = bon.y; }
   else { const dx = bon.tx - bon.x, dy = bon.ty - bon.y, d = Math.hypot(dx, dy); if (d > .5) { const sp = Math.min(640, d * 12); bon.x += dx / d * Math.min(d, sp * dt); bon.y += dy / d * Math.min(d, sp * dt); } }
   bon.x = clamp(bon.x, 36, W - 36); bon.y = clamp(bon.y, BON_YMIN, BON_YMAX);
   bon.vx += ((bon.x - px) / Math.max(dt, .001) - bon.vx) * Math.min(1, dt * 12);
@@ -854,8 +861,11 @@ function update(dt) {
   if (G.rs && (G.state !== 'play' || !anyOrb())) G.rs = null;
   G.cd = Math.max(0, G.cd - dt); G.heartFlash = Math.max(0, G.heartFlash - dt);
   for (const sh of G.shots) {
-    sh.t += dt; sh.vy += SLING.G * dt; sh.x += sh.vx * dt; sh.y += sh.vy * dt;
-    for (const c of G.cats) if (c.state === 'orb' && Math.hypot(c.x - sh.x, c.y - sh.y) < 46 + SLING.R) { rescue(c, false); G.score += 30; pop(c.x, c.y - 66, 'ナイスショット!', '#ff3d8b', 26, 1.1); sh.dead = true; break; }
+    sh.t += dt; sh.vy += SLING.G * dt;
+    if (sh.t > .05) { let tg = null, td = 150; for (const c of G.cats) if (c.state === 'orb') { const d = Math.hypot(c.x - sh.x, c.y - sh.y); if (d < td) { td = d; tg = c; } }
+      if (tg) { const sp = Math.max(500, Math.hypot(sh.vx, sh.vy)), k = Math.min(1, dt * 8); sh.vx += ((tg.x - sh.x) / td * sp - sh.vx) * k; sh.vy += ((tg.y - sh.y) / td * sp - sh.vy) * k; } }
+    sh.x += sh.vx * dt; sh.y += sh.vy * dt;
+    for (const c of G.cats) if (c.state === 'orb' && Math.hypot(c.x - sh.x, c.y - sh.y) < 64 + SLING.R) { rescue(c, false); G.score += 30; pop(c.x, c.y - 66, 'ナイスショット!', '#ff3d8b', 26, 1.1); sh.dead = true; break; }
     if (sh.y > H + 40 || sh.x < -40 || sh.x > W + 40 || sh.y < -90 || sh.t > 3.5) sh.dead = true;
   }
   G.shots = G.shots.filter(sh => !sh.dead);
@@ -1004,7 +1014,7 @@ function drawHUD(c) {
   $('btnPunch').disabled = !(ready && G.state === 'play');
   const rb = $('btnRescue'), any = anyOrb();
   rb.disabled = !(G.state === 'play' && (G.rs || (any && G.cd <= 0))); rb.classList.toggle('busy', !!G.rs);
-  const lab = G.rs ? 'やめる' : G.cd > 0 && G.state === 'play' ? 'じゅんび…' : 'ゴムでぽん'; if (rb.textContent !== lab) rb.textContent = lab;
+  const lab = G.rs ? 'はなして!' : G.cd > 0 && G.state === 'play' ? 'じゅんび…' : any && G.state === 'play' ? 'ひっぱる!' : 'ゴムでぽん'; if (rb.textContent !== lab) rb.textContent = lab;
 }
 function drawSling(c) {
   for (const sh of G.shots) { c.save(); c.fillStyle = '#fff'; c.strokeStyle = INK; c.lineWidth = 2.8; c.beginPath(); c.arc(sh.x, sh.y, SLING.R, 0, 6.3); c.fill(); c.stroke(); c.restore(); }
@@ -1119,7 +1129,9 @@ $('btnResume').addEventListener('click', () => setPause(false));
 $('btnTitle').addEventListener('click', showTitle);
 $('btnPause').addEventListener('click', () => setPause(G.state === 'play'));
 $('btnPunch').addEventListener('click', doPunch);
-$('btnRescue').addEventListener('click', rescueStart);
+$('btnRescue').addEventListener('pointerdown', padDown);
+addEventListener('pointermove', e => { if (e.pointerId === aimId && G.rs && G.rs.drag) aimSet(e); });
+addEventListener('pointerup', padEnd); addEventListener('pointercancel', padEnd);
 document.addEventListener('click', e => { if (e.target.closest && e.target.closest('button')) SFX.click(); }, true);
 $('btnBgm').addEventListener('click', () => {
   bgmOn = !bgmOn; $('btnBgm').setAttribute('aria-pressed', String(bgmOn)); $('bgmName').classList.toggle('off', !bgmOn);
@@ -1132,18 +1144,18 @@ $('btnSe').addEventListener('click', () => {
 document.addEventListener('visibilitychange', () => { if (document.hidden) setPause(true); });
 
 /* ---------- input ---------- */
-const ptr = { down: false };
+const ptr = { down: false, id: -1 };
 function setTarget(e) {
   const r = canvas.getBoundingClientRect(), x = (e.clientX - r.left) / r.width * W, y = (e.clientY - r.top) / r.height * H;
   bon.tx = clamp(x, 36, W - 36); bon.ty = clamp(e.pointerType === 'mouse' ? y + 50 : y - 10, BON_YMIN, BON_YMAX);
 }
-stage.addEventListener('pointerdown', e => { if (e.target.closest('button')) return; ptr.down = true; if (G.state === 'play') { if (G.rs) aimSet(e, true); else setTarget(e); } try { stage.setPointerCapture(e.pointerId); } catch (_) {} });
-stage.addEventListener('pointermove', e => { if (G.state !== 'play') return; if (G.rs) { if (ptr.down && G.rs.drag) aimSet(e); return; } if (e.pointerType === 'mouse' || ptr.down) setTarget(e); });
-const up = () => { ptr.down = false; };
-stage.addEventListener('pointerup', () => { if (G.rs && G.rs.drag && G.state === 'play') aimFire(); up(); }); stage.addEventListener('pointercancel', () => { if (G.rs) { G.rs.drag = false; G.rs.pull = 0; } up(); });
+stage.addEventListener('pointerdown', e => { if (e.target.closest('button')) return; ptr.down = true; ptr.id = e.pointerId; if (G.state === 'play') setTarget(e); try { stage.setPointerCapture(e.pointerId); } catch (_) {} });
+stage.addEventListener('pointermove', e => { if (G.state !== 'play' || e.pointerId === aimId) return; if (e.pointerType === 'mouse' || (ptr.down && e.pointerId === ptr.id)) setTarget(e); });
+const up = e => { if (e && e.pointerId !== ptr.id) return; ptr.down = false; };
+stage.addEventListener('pointerup', up); stage.addEventListener('pointercancel', up);
 addEventListener('keydown', e => {
   if (e.key === ' ' || e.key === 'Spacebar') { if (G.state === 'play') { e.preventDefault(); doPunch(); } return; }
-  if (e.key === 'e' || e.key === 'E' || e.key === 'Enter') { if (G.state === 'play') { e.preventDefault(); rescueStart(); } return; }
+  if (e.key === 'e' || e.key === 'E' || e.key === 'Enter') { if (G.state === 'play') { e.preventDefault(); quickShot(); } return; }
   if (e.key === 'p' || e.key === 'P' || e.key === 'Escape') { if (G.state === 'play') setPause(true); else if (G.state === 'pause') setPause(false); return; }
   if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) e.preventDefault();
   keys[e.key] = true;
